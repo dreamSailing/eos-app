@@ -1,0 +1,3 @@
+639d31ff779340aa6afae842c5b5f3e18a2e0f0d7149ed4212e2be9ffbdf8c7b *eos-app-setup-0.1.0-beta.1.exe
+4168ef2e07fed123b40797b4603f68a36cce957a39586e35a2a0da70e27df44c *eos-app-v0.1.0-beta.1-windows-amd64.exe
+25a8c2175feecb2c66c793bd38e9822e96dbf54f39216f85cd1be27f86e69e15 *eos-app-v0.1.0-beta.1-windows-amd64.zip
