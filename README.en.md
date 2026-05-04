@@ -53,7 +53,7 @@ Exact asset names, versions, and checksums are published on each Release page.
 
 Main workspace overview:
 
-![EOS App workspace overview](./assets/screenshots/workspace-overview.png)
+![EOS App workspace overview](https://github.com/dreamSailing/eos-app/releases/download/v0.1.0-beta.1/workspace-overview.png)
 
 - The left sidebar provides entry points for new chats, skills and apps, automations, and sessions
 - The center area hosts the main conversation workspace and quick-start suggestions
