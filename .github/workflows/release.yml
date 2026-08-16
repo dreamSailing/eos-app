@@ -1,0 +1,225 @@
+name: Release
+
+# EOS App 三端 Release 构建（Windows / macOS / Linux，五目标矩阵），
+# 产物与校验文件发布到本仓库 Release。
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v1.0.0-beta.2，留空则拒绝）"
+        required: true
+        default: ""
+      src_ref:
+        description: "App 源码 ref（默认 main）"
+        required: false
+        default: "main"
+      core_ref:
+        description: "Core 构建 ref（默认 main）"
+        required: false
+        default: "main"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-13（x86_64 runner）已退役：darwin/amd64 在 macos-latest（ARM）
+          # 上交叉编译（cargo --target / GOARCH=amd64 + clang -arch x86_64）。
+          - { goos: windows, goarch: amd64, runner: windows-latest, triple: x86_64-pc-windows-gnu }
+          - { goos: darwin, goarch: amd64, runner: macos-latest, triple: x86_64-apple-darwin }
+          - { goos: darwin, goarch: arm64, runner: macos-latest, triple: aarch64-apple-darwin }
+          - { goos: linux, goarch: amd64, runner: ubuntu-latest, triple: x86_64-unknown-linux-musl }
+          - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm, triple: aarch64-unknown-linux-musl }
+
+    steps:
+      # eos-app 的 go.mod replace github.com/dreamSailing/eos => ../eos-cli，
+      # 布局必须保持 app 与 eos-cli 同级。
+      - name: Checkout app source
+        uses: actions/checkout@v4
+        with:
+          repository: dreamSailing/eos-app-src
+          ref: ${{ inputs.src_ref || 'main' }}
+          token: ${{ secrets.EOS_CORE_PAT }}
+          path: app
+
+      - name: Checkout eos-cli (dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: dreamSailing/eos
+          path: eos-cli
+
+      - name: Checkout core source
+        uses: actions/checkout@v4
+        with:
+          repository: dreamSailing/eos-core-rs
+          ref: ${{ inputs.core_ref || 'main' }}
+          token: ${{ secrets.EOS_CORE_PAT }}
+          path: eos-core-rs
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Install Rust target
+        run: rustup target add ${{ matrix.triple }}
+
+      - name: Install musl toolchain (linux musl)
+        if: contains(matrix.triple, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      # Wails v3 beta.5 Linux 走 cgo，依赖 GTK4 + WebKitGTK 6.0（pkg-config 探测）。
+      - name: Install GTK/WebKit headers (linux)
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev pkg-config
+
+      # build_release.go 的 Windows syso 生成（图标/版本资源）依赖 wails3 CLI。
+      - name: Install wails3 CLI (windows)
+        if: matrix.goos == 'windows'
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.5
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: eos-core-rs
+          key: ${{ matrix.triple }}
+
+      - name: Build sidecar (release)
+        working-directory: eos-core-rs
+        run: cargo build --release --target ${{ matrix.triple }} -p eos-core-bin
+
+      - name: Sign and package sidecar
+        shell: pwsh
+        working-directory: eos-core-rs
+        env:
+          EOS_SIGNING_KEY: ${{ secrets.EOS_SIGNING_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:EOS_SIGNING_KEY)) {
+            throw "EOS_SIGNING_KEY secret 未设置"
+          }
+          $exeName = if ("${{ matrix.goos }}" -eq "windows") { "eos-core.exe" } else { "eos-core" }
+          $built = "target/${{ matrix.triple }}/release/$exeName"
+          $staged = "target/release/$exeName"
+          New-Item -ItemType Directory -Force -Path (Split-Path $staged) | Out-Null
+          Copy-Item -Force $built $staged
+          New-Item -ItemType Directory -Force -Path scripts | Out-Null
+          [IO.File]::WriteAllText("$PWD/scripts/eos-signing-key.pem", $env:EOS_SIGNING_KEY)
+          & pwsh -NoProfile -File scripts/package-public-artifact.ps1 `
+            -Target "${{ matrix.triple }}" `
+            -PrivateKeyPath scripts/eos-signing-key.pem
+
+      - name: Verify sidecar sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest="eos-core-rs/pkg/coreapi/sidecar/core/${{ matrix.triple }}"
+          manifest_hash=$(python3 -c "import json; print(json.load(open('$dest/manifest.json'))['sha256'].replace('sha256:','').lower())" 2>/dev/null \
+            || jq -r '.sha256' "$dest/manifest.json" | sed 's/^sha256://' | tr 'A-Z' 'a-z')
+          bin_file=$(ls "$dest"/eos-core* | head -1)
+          actual_hash=$(sha256sum "$bin_file" | awk '{print $1}')
+          echo "manifest=$manifest_hash binary=$actual_hash"
+          [ "$manifest_hash" = "$actual_hash" ] || { echo "::error::sha256 不一致"; exit 1; }
+
+      - name: Stage sidecar into app core dir
+        shell: bash   # Windows runner 默认 shell 是 pwsh，bash 语法必须显式声明
+        run: |
+          set -euo pipefail
+          mkdir -p "app/core/${{ matrix.triple }}"
+          cp "eos-core-rs/pkg/coreapi/sidecar/core/${{ matrix.triple }}"/eos-core* "app/core/${{ matrix.triple }}/"
+          cp "eos-core-rs/pkg/coreapi/sidecar/core/${{ matrix.triple }}/manifest.json" "app/core/${{ matrix.triple }}/"
+
+      - name: Build release archive
+        shell: bash
+        working-directory: app
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version || github.ref_name }}"
+          [ -n "$VERSION" ] || { echo "::error::版本号为空"; exit 1; }
+          # 目标三元组显式下发（native runner 上与宿主一致；darwin/amd64 为交叉，
+          # wails darwin 走 cgo，需 CC 指定 -arch x86_64）。
+          export CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }}
+          if [ "${{ matrix.goos }}/${{ matrix.goarch }}" = "darwin/amd64" ]; then
+            export CC="clang -arch x86_64"
+          fi
+          go run ./scripts/build_release.go \
+            -version "$VERSION" \
+            -commit "${{ github.sha }}" \
+            -build-date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            -out dist \
+            -targets ${{ matrix.goos }}/${{ matrix.goarch }}
+          ls -la dist
+
+      # Windows 安装器：Inno Setup（installer.iss 与历版 setup 同源）。
+      # 从 staging 取 exe（.iss 读 output\eos-app.exe），内核走已 staged 的
+      # core\x86_64-pc-windows-gnu\。pwsh 调 iscc——bash 下 /D 会被 MSYS
+      # 路径转换破坏。
+      - name: Build Windows installer (Inno Setup)
+        if: matrix.goos == 'windows'
+        shell: pwsh
+        working-directory: app
+        run: |
+          $version = "${{ inputs.version || github.ref_name }}"
+          if ([string]::IsNullOrWhiteSpace($version)) { throw "version 为空" }
+          # staging 目录名走 build_release.go 的 sanitizeVersion：剥前导 v + 非法字符转连字符
+          $dirVersion = $version.Trim().TrimStart('v')
+          if ([string]::IsNullOrWhiteSpace($dirVersion)) { $dirVersion = "dev" }
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          Copy-Item -Force "dist/eos-app_${dirVersion}_windows-amd64/eos-app.exe" "output/eos-app.exe"
+          & iscc "/DMyAppVersion=$version" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed (exit $LASTEXITCODE)" }
+          Get-ChildItem dist
+
+      # build_release.go 会留下同名 staging 目录（exe+core 展开态），归档与
+      # 安装器都取完后清掉，防止污染 release 资产。
+      - name: Clean staging dirs
+        shell: bash
+        working-directory: app
+        run: rm -rf dist/eos-app_*/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: app/dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          gh release create "$VERSION" dist/* \
+            --title "EOS App $VERSION" \
+            --notes "三端生产包（Windows / macOS / Linux，含各架构）。内核为构建时指定 ref 的签名产物，桌面端启动无控制台窗口。校验见 SHA256SUMS.txt。" \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null \
+          || gh release upload "$VERSION" dist/* --clobber --repo "$GITHUB_REPOSITORY"
