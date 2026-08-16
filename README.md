@@ -8,7 +8,7 @@ EOS App 是官方桌面应用发行仓库，提供安装包、版本说明、截
 
 本仓库不提供 EOS App 桌面端源码。EOS App 的核心能力基于开源项目 [EOS CLI](https://github.com/dreamSailing/eos) 打造。
 
-当前 `v1.0.0-beta.1` 是与 EOS CLI 同步的首个统一 beta 版本，桌面端默认随包分发 Rust Core，对外发布以 Windows 安装包和 Windows 便携压缩包为主。
+当前 `v1.0.0-beta.2` 与 EOS CLI 保持同版号，随包分发签名 Rust Core（sha256 校验 + Ed25519 验签），对外发布覆盖三端：Windows（setup 安装器 + 便携 zip）、macOS（Intel + Apple Silicon）、Linux（amd64 + arm64）。
 
 - 发行仓库：https://github.com/dreamSailing/eos-app
 - 问题反馈：https://github.com/dreamSailing/eos-app/issues
@@ -43,11 +43,12 @@ EOS App 是官方桌面应用发行仓库，提供安装包、版本说明、截
 
 本仓库面向桌面应用分发，公开内容以 README、版本说明和安装包为主。
 
-当前计划提供的发布资产包括：
+每个 Release 提供的发布资产：
 
-- Windows x64 安装包
-- Windows x64 便携压缩包
-- 校验文件（如 `SHA256SUMS.txt`）
+- Windows x64 setup 安装器（`eos-app-setup-<版本>.exe`）与便携压缩包
+- macOS tar.gz（Intel 与 Apple Silicon）
+- Linux tar.gz（amd64 与 arm64）
+- 校验文件 `SHA256SUMS.txt`
 
 具体资产名称、版本号与校验信息以每个 Release 页面为准。
 

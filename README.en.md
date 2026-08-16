@@ -8,7 +8,7 @@ EOS App is the official desktop distribution repository, providing installers, r
 
 This repository does not include the EOS App desktop source code. Core capabilities of EOS App are built on top of the open-source [EOS CLI](https://github.com/dreamSailing/eos).
 
-`v1.0.0-beta.1` is the first unified beta release aligned with EOS CLI. The desktop distribution now ships Rust Core by default and publishes Windows installers plus Windows portable archives as the primary public assets.
+`v1.0.0-beta.2` is version-aligned with EOS CLI. Every package ships the signed Rust Core (sha256-verified, Ed25519-signed) across three platforms: Windows (setup installer + portable zip), macOS (Intel + Apple Silicon), and Linux (amd64 + arm64).
 
 - Distribution Repository: https://github.com/dreamSailing/eos-app
 - Issues: https://github.com/dreamSailing/eos-app/issues
@@ -43,11 +43,12 @@ This repository does not include the EOS App desktop source code. Core capabilit
 
 This repository is intended for desktop app distribution. Public materials focus on the README, release notes, and installable packages.
 
-Planned release assets include:
+Each release provides:
 
-- Windows x64 installer
-- Windows x64 portable archive
-- Checksum file such as `SHA256SUMS.txt`
+- Windows x64 setup installer (`eos-app-setup-<version>.exe`) and portable archive
+- macOS tar.gz (Intel and Apple Silicon)
+- Linux tar.gz (amd64 and arm64)
+- Checksum file `SHA256SUMS.txt`
 
 Exact asset names, versions, and checksums are published on each Release page.
 
