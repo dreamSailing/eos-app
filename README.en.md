@@ -8,7 +8,7 @@ EOS App is the official desktop distribution repository, providing installers, r
 
 This repository does not include the EOS App desktop source code. Core capabilities of EOS App are built on top of the open-source [EOS CLI](https://github.com/dreamSailing/eos).
 
-`v1.0.0-beta.2` is version-aligned with EOS CLI. Every package ships the signed Rust Core (sha256-verified, Ed25519-signed) across three platforms: Windows (setup installer + portable zip), macOS (Intel + Apple Silicon), and Linux (amd64 + arm64).
+The current release is `v1.0.0-beta.4`. Every package ships the signed Rust Core (sha256-verified, Ed25519-signed) across three platforms: Windows (setup installer + portable zip), macOS (dmg installer + portable tar.gz, Intel and Apple Silicon), and Linux (amd64 + arm64).
 
 - Distribution Repository: https://github.com/dreamSailing/eos-app
 - Issues: https://github.com/dreamSailing/eos-app/issues
@@ -46,7 +46,7 @@ This repository is intended for desktop app distribution. Public materials focus
 Each release provides:
 
 - Windows x64 setup installer (`eos-app-setup-<version>.exe`) and portable archive
-- macOS tar.gz (Intel and Apple Silicon)
+- macOS dmg installer (Intel and Apple Silicon, drag-and-drop install) and portable tar.gz
 - Linux tar.gz (amd64 and arm64)
 - Checksum file `SHA256SUMS.txt`
 
@@ -54,13 +54,13 @@ Exact asset names, versions, and checksums are published on each Release page.
 
 ## Screenshots
 
-Main workspace overview:
+Main workspace overview (macOS with native traffic-light window controls; Windows and Linux use matching platform-style buttons):
 
-![EOS App workspace overview](https://github.com/dreamSailing/eos-app/releases/download/v1.0.0-beta.1/workspace-overview.png)
+![EOS App workspace overview](https://github.com/dreamSailing/eos-app/releases/download/v1.0.0-beta.4/workspace-overview.png)
 
 - The left sidebar provides entry points for new chats, skills and apps, automations, and sessions
 - The center area hosts the main conversation workspace and quick-start suggestions
-- The input area at the bottom is used to start the next task directly
+- The input area at the bottom is used to start the next task directly, with the Bash terminal docked below
 
 ## License
 
