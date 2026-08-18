@@ -93,7 +93,7 @@ jobs:
       # xcap 截图链（wayland-sys/drm-sys/pipewire-sys 的 pkg-config 探测）。
       - name: Install GTK/WebKit headers (linux)
         if: matrix.goos == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev pkg-config libpipewire-0.3-dev libdrm-dev libgbm-dev libwayland-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev pkg-config libpipewire-0.3-dev libdrm-dev libgbm-dev libwayland-dev libxdo-dev
 
       # build_release.go 的 Windows syso 生成（图标/版本资源）依赖 wails3 CLI。
       - name: Install wails3 CLI (windows)
