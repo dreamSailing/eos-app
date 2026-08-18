@@ -40,8 +40,13 @@ jobs:
           - { goos: windows, goarch: amd64, runner: windows-latest, triple: x86_64-pc-windows-gnu }
           - { goos: darwin, goarch: amd64, runner: macos-latest, triple: x86_64-apple-darwin }
           - { goos: darwin, goarch: arm64, runner: macos-latest, triple: aarch64-apple-darwin }
-          - { goos: linux, goarch: amd64, runner: ubuntu-latest, triple: x86_64-unknown-linux-musl }
-          - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm, triple: aarch64-unknown-linux-musl }
+          # Linux 内核目标用 glibc（gnu）而非 musl：内核的截图能力依赖
+          # xcap → wayland/drm/gbm/pipewire 系统库（build.rs 走 pkg-config
+          # 探测，无 dlopen 逃生门），musl 静态目标下交叉探测必败；此前
+          # 全量编译从未真正成功过，全靠 rust-cache 侥幸命中。gnu 目标在
+          # 原生 runner 上系统库全通，且与桌面端 Go 侧（WebKitGTK 动态链）一致。
+          - { goos: linux, goarch: amd64, runner: ubuntu-latest, triple: x86_64-unknown-linux-gnu }
+          - { goos: linux, goarch: arm64, runner: ubuntu-24.04-arm, triple: aarch64-unknown-linux-gnu }
 
     steps:
       # eos-app 的 go.mod replace github.com/dreamSailing/eos => ../eos-cli，
@@ -84,9 +89,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       # Wails v3 beta.5 Linux 走 cgo，依赖 GTK4 + WebKitGTK 6.0（pkg-config 探测）。
+      # GTK/WebKit 供桌面端 Go 构建；pipewire/drm/gbm/wayland 头文件供内核
+      # xcap 截图链（wayland-sys/drm-sys/pipewire-sys 的 pkg-config 探测）。
       - name: Install GTK/WebKit headers (linux)
         if: matrix.goos == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev pkg-config libpipewire-0.3-dev libdrm-dev libgbm-dev libwayland-dev
 
       # build_release.go 的 Windows syso 生成（图标/版本资源）依赖 wails3 CLI。
       - name: Install wails3 CLI (windows)
